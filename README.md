@@ -43,15 +43,33 @@ Phase 4: 完整 AMS 系统
 pip install -r requirements.txt
 ```
 
+### 生成测试数据
+```bash
+python src/generate_data.py --output_dir data/images
+```
+
 ### 训练模型
 ```bash
-python src/train.py --data data/images --epochs 50
+python src/train.py --data_dir data/images/train --epochs 50
 ```
 
 ### 推理测试
 ```bash
-python src/infer.py --model models/best.pth --image test.jpg
+python src/infer.py --model_path models/best_loss.pth --image data/images/test/img_0000.png
 ```
+
+## 📊 性能指标 (Phase 1)
+
+| 指标 | 数值 |
+|------|------|
+| 模型参数量 | 887,822 |
+| 训练准确率 | 100% |
+| 验证准确率 | 100% |
+| 推理时间 (CPU) | 7.37ms |
+| 吞吐量 | ~135 张/秒 |
+| 内存占用 | <100MB |
+
+*测试环境：Windows 11, CPU only*
 
 ## 📁 项目结构
 
