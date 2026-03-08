@@ -1,6 +1,6 @@
 """
-推理脚本 - Phase 1: 图片量测模型推理
-支持 CPU 推理，实时预测
+Inference Script - Phase 1: Image Measurement Model
+CPU-optimized inference with real-time prediction
 """
 
 import os
@@ -13,8 +13,9 @@ import cv2
 import numpy as np
 from PIL import Image
 
-# 添加项目路径
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+# Add project path
+project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, project_root)
 
 from src.models import get_model
 from src.utils import load_image, draw_bbox
@@ -22,70 +23,71 @@ from src.utils import load_image, draw_bbox
 
 def load_model(model_path, model_name='light', num_classes=10, input_size=224, device='cpu'):
     """
-    加载模型
+    Load model
     
     Args:
-        model_path: 模型文件路径
-        model_name: 模型架构
-        num_classes: 类别数
-        input_size: 输入尺寸
-        device: 设备
+        model_path: Model file path
+        model_name: Model architecture
+        num_classes: Number of classes
+        input_size: Input size
+        device: Device
     
     Returns:
-        模型实例
+        Model instance
     """
-    print(f"🧠 加载模型：{model_path}")
+    print(f"[MODEL] Loading: {model_path}")
     
     model = get_model(model_name, num_classes=num_classes, input_size=input_size)
     
-    # 加载检查点
+    # Load checkpoint
     checkpoint = torch.load(model_path, map_location=device, weights_only=False)
     
     if 'model_state_dict' in checkpoint:
         model.load_state_dict(checkpoint['model_state_dict'])
-        print(f"📊 训练 epoch: {checkpoint.get('epoch', 'N/A')}")
-        print(f"📊 训练准确率：{checkpoint.get('acc', 'N/A'):.2f}%" if checkpoint.get('acc') else "")
+        print(f"[STATS] Epoch: {checkpoint.get('epoch', 'N/A')}")
+        if checkpoint.get('acc'):
+            print(f"[STATS] Training accuracy: {checkpoint['acc']:.2f}%")
     else:
         model.load_state_dict(checkpoint)
     
     model.to(device)
     model.eval()
     
-    print(f"✓ 模型加载成功")
+    print(f"[OK] Model loaded")
     return model
 
 
 def predict(model, image_path, device='cpu', input_size=224, class_names=None):
     """
-    单张图像预测
+    Single image prediction
     
     Args:
-        model: 模型实例
-        image_path: 图像路径
-        device: 设备
-        input_size: 输入尺寸
-        class_names: 类别名称列表
+        model: Model instance
+        image_path: Image path
+        device: Device
+        input_size: Input size
+        class_names: List of class names
     
     Returns:
-        dict: 预测结果
+        dict: Prediction results
     """
-    # 加载图像
+    # Load image
     tensor, pil_image = load_image(image_path, input_size=input_size)
     tensor = tensor.to(device)
     
-    # 推理
+    # Inference
     with torch.no_grad():
         start_time = time.time()
         cls_output, reg_output = model(tensor)
         infer_time = time.time() - start_time
     
-    # 解析结果
+    # Parse results
     cls_prob = torch.softmax(cls_output, dim=1)
     cls_conf, cls_pred = cls_prob.max(1)
     
     box = reg_output.squeeze().cpu().numpy()
     
-    # 获取类别名称
+    # Get class name
     pred_class = cls_pred.item()
     class_name = class_names[pred_class] if class_names else f"Class {pred_class}"
     confidence = cls_conf.item() * 100
@@ -103,17 +105,17 @@ def predict(model, image_path, device='cpu', input_size=224, class_names=None):
 
 def predict_batch(model, image_paths, device='cpu', input_size=224, class_names=None):
     """
-    批量预测
+    Batch prediction
     
     Args:
-        model: 模型实例
-        image_paths: 图像路径列表
-        device: 设备
-        input_size: 输入尺寸
-        class_names: 类别名称列表
+        model: Model instance
+        image_paths: List of image paths
+        device: Device
+        input_size: Input size
+        class_names: List of class names
     
     Returns:
-        list: 预测结果列表
+        list: Prediction results
     """
     results = []
     
@@ -127,36 +129,36 @@ def predict_batch(model, image_paths, device='cpu', input_size=224, class_names=
 
 def visualize_result(image_path, result, output_path=None, show=True):
     """
-    可视化预测结果
+    Visualize prediction results
     
     Args:
-        image_path: 图像路径
-        result: 预测结果
-        output_path: 输出路径 (可选)
-        show: 是否显示
+        image_path: Image path
+        result: Prediction result
+        output_path: Output path (optional)
+        show: Whether to display
     """
-    # 加载原始图像
+    # Load original image
     image = cv2.imread(image_path)
     if image is None:
-        print(f"⚠️  无法加载图像：{image_path}")
+        print(f"[WARN] Cannot load image: {image_path}")
         return
     
-    # 绘制边界框
+    # Draw bounding box
     box = result['box']
     class_name = f"{result['class_name']} ({result['confidence']:.1f}%)"
     
-    # OpenCV 使用 BGR
+    # OpenCV uses BGR
     image_with_bbox = draw_bbox(
         image, box, class_name, 
         color=(0, 255, 0), thickness=2
     )
     
-    # 保存结果
+    # Save result
     if output_path:
         cv2.imwrite(output_path, image_with_bbox)
-        print(f"💾 结果保存至：{output_path}")
+        print(f"[SAVE] Result saved: {output_path}")
     
-    # 显示结果
+    # Display result
     if show:
         cv2.imshow('Prediction', image_with_bbox)
         cv2.waitKey(0)
@@ -166,16 +168,16 @@ def visualize_result(image_path, result, output_path=None, show=True):
 
 
 def infer(args):
-    """主推理函数"""
+    """Main inference function"""
     print("=" * 60)
-    print("🔍 Adaptive Model System - 推理脚本")
+    print("[AMS] Adaptive Model System - Inference Script")
     print("=" * 60)
     
-    # 设备配置
+    # Device configuration
     device = torch.device('cpu')
-    print(f"📦 使用设备：{device}")
+    print(f"[DEVICE] Using: {device}")
     
-    # 加载模型
+    # Load model
     model = load_model(
         args.model_path,
         model_name=args.model,
@@ -184,16 +186,16 @@ def infer(args):
         device=device,
     )
     
-    # 加载类别名称 (如果有)
+    # Load class names (if provided)
     class_names = None
     if args.class_names:
         with open(args.class_names, 'r', encoding='utf-8') as f:
             class_names = [line.strip() for line in f.readlines()]
-        print(f"📋 加载类别名称：{len(class_names)} 个")
+        print(f"[INFO] Loaded {len(class_names)} class names")
     
-    # 单张图像推理
+    # Single image inference
     if args.image:
-        print(f"\n🖼️  推理图像：{args.image}")
+        print(f"\n[IMG] Image: {args.image}")
         
         result = predict(
             model, args.image, device, 
@@ -201,13 +203,13 @@ def infer(args):
             class_names=class_names,
         )
         
-        print("\n📊 预测结果:")
-        print(f"   类别：{result['class_name']}")
-        print(f"   置信度：{result['confidence']:.2f}%")
-        print(f"   边界框：{result['box']}")
-        print(f"   推理时间：{result['inference_time']*1000:.2f}ms")
+        print("\n[STATS] Prediction results:")
+        print(f"   Class: {result['class_name']}")
+        print(f"   Confidence: {result['confidence']:.2f}%")
+        print(f"   Box: {result['box']}")
+        print(f"   Inference time: {result['inference_time']*1000:.2f}ms")
         
-        # 可视化
+        # Visualize
         if args.output or args.show:
             visualize_result(
                 args.image, result,
@@ -215,11 +217,11 @@ def infer(args):
                 show=args.show,
             )
     
-    # 批量推理
+    # Batch inference
     elif args.image_dir:
-        print(f"\n📁 推理目录：{args.image_dir}")
+        print(f"\n[DATA] Directory: {args.image_dir}")
         
-        # 收集所有图像
+        # Collect all images
         image_extensions = ('.jpg', '.jpeg', '.png', '.bmp')
         image_paths = [
             os.path.join(args.image_dir, f)
@@ -227,22 +229,22 @@ def infer(args):
             if f.lower().endswith(image_extensions)
         ]
         
-        print(f"📊 找到 {len(image_paths)} 张图像")
+        print(f"[STATS] Found {len(image_paths)} images")
         
-        # 批量预测
+        # Batch prediction
         results = predict_batch(
             model, image_paths, device,
             input_size=args.input_size,
             class_names=class_names,
         )
         
-        # 统计
-        print(f"\n📊 推理完成!")
-        print(f"   总图像数：{len(results)}")
+        # Statistics
+        print(f"\n[OK] Inference completed!")
+        print(f"   Total images: {len(results)}")
         avg_time = sum(r['inference_time'] for r in results) / len(results)
-        print(f"   平均推理时间：{avg_time*1000:.2f}ms/张")
+        print(f"   Average time: {avg_time*1000:.2f}ms/image")
         
-        # 保存结果
+        # Save results
         if args.output_dir:
             os.makedirs(args.output_dir, exist_ok=True)
             for result in results:
@@ -255,60 +257,60 @@ def infer(args):
                     output_path=output_path,
                     show=False,
                 )
-            print(f"💾 结果保存至：{args.output_dir}")
+            print(f"[SAVE] Results saved: {args.output_dir}")
     
     else:
-        print("⚠️  请指定 --image 或 --image_dir")
+        print("[WARN] Please specify --image or --image_dir")
 
 
 def main():
-    parser = argparse.ArgumentParser(description='AMS 图片量测模型推理')
+    parser = argparse.ArgumentParser(description='AMS Image Measurement Model Inference')
     
-    # 模型参数
+    # Model parameters
     parser.add_argument('--model_path', type=str, required=True,
-                       help='模型文件路径 (.pth)')
+                       help='Model file path (.pth)')
     parser.add_argument('--model', type=str, default='light',
                        choices=['light', 'tiny'],
-                       help='模型架构')
+                       help='Model architecture')
     parser.add_argument('--num_classes', type=int, default=10,
-                       help='分类类别数')
+                       help='Number of classes')
     parser.add_argument('--input_size', type=int, default=224,
-                       help='输入图像尺寸')
+                       help='Input image size')
     
-    # 输入参数
+    # Input parameters
     parser.add_argument('--image', type=str,
-                       help='单张图像路径')
+                       help='Single image path')
     parser.add_argument('--image_dir', type=str,
-                       help='图像目录 (批量推理)')
+                       help='Image directory (batch inference)')
     
-    # 输出参数
+    # Output parameters
     parser.add_argument('--output', type=str,
-                       help='输出图像路径 (单张)')
+                       help='Output image path (single)')
     parser.add_argument('--output_dir', type=str,
-                       help='输出目录 (批量)')
+                       help='Output directory (batch)')
     parser.add_argument('--show', action='store_true',
-                       help='显示结果')
+                       help='Show results')
     
-    # 其他参数
+    # Other parameters
     parser.add_argument('--class_names', type=str,
-                       help='类别名称文件 (每行一个)')
+                       help='Class names file (one per line)')
     
     args = parser.parse_args()
     
-    # 检查输入
+    # Check input
     if not args.image and not args.image_dir:
-        print("⚠️  请指定 --image 或 --image_dir")
-        print("\n使用示例:")
+        print("[WARN] Please specify --image or --image_dir")
+        print("\nExamples:")
         print("  python src/infer.py --model_path models/best.pth --image test.jpg")
         print("  python src/infer.py --model_path models/best.pth --image_dir data/test/ --output_dir results/")
         sys.exit(1)
     
     if args.image and not os.path.exists(args.image):
-        print(f"⚠️  图像不存在：{args.image}")
+        print(f"[WARN] Image not found: {args.image}")
         sys.exit(1)
     
     if args.image_dir and not os.path.exists(args.image_dir):
-        print(f"⚠️  目录不存在：{args.image_dir}")
+        print(f"[WARN] Directory not found: {args.image_dir}")
         sys.exit(1)
     
     infer(args)

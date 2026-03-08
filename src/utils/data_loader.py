@@ -1,5 +1,5 @@
 """
-工具函数 - 数据加载、预处理、可视化等
+Utility functions - Data loading, preprocessing, visualization
 """
 
 import os
@@ -13,14 +13,14 @@ from PIL import Image
 
 def get_transform(train=True, input_size=224):
     """
-    获取数据变换
+    Get data transforms
     
     Args:
-        train: 是否为训练模式
-        input_size: 输入尺寸
+        train: Whether in training mode
+        input_size: Input size
     
     Returns:
-        transforms.Compose 对象
+        transforms.Compose object
     """
     if train:
         return transforms.Compose([
@@ -43,24 +43,19 @@ def get_transform(train=True, input_size=224):
 
 class ImageMeasureDataset(Dataset):
     """
-    图片量测数据集
+    Image measurement dataset
     
-    假设数据目录结构:
-    data/
-    ├── images/
-    │   ├── class1/
-    │   │   ├── img1.jpg
-    │   │   └── ...
-    │   └── class2/
-    └── annotations.txt (可选，包含边界框标注)
+    Supports two structures:
+    1. Class-based: data/class1/img1.jpg, data/class2/img2.jpg
+    2. Flat: data/img1.jpg, data/img2.jpg (auto-assigns labels)
     """
     
     def __init__(self, root_dir, transform=None, has_annotations=False):
         """
         Args:
-            root_dir: 数据根目录
-            transform: 数据变换
-            has_annotations: 是否有标注文件
+            root_dir: Data directory
+            transform: Data transforms
+            has_annotations: Whether annotation file exists
         """
         self.root_dir = root_dir
         self.transform = transform
@@ -73,25 +68,38 @@ class ImageMeasureDataset(Dataset):
         self._load_data()
     
     def _load_data(self):
-        """加载数据"""
-        # 遍历所有类别目录
-        for class_name in sorted(os.listdir(self.root_dir)):
-            class_dir = os.path.join(self.root_dir, class_name)
-            if not os.path.isdir(class_dir):
-                continue
-            
-            class_idx = hash(class_name) % 1000  # 简单哈希作为类别索引
-            
-            for img_name in os.listdir(class_dir):
+        """Load data"""
+        # Check if there are class subdirectories
+        subdirs = [d for d in os.listdir(self.root_dir) 
+                   if os.path.isdir(os.path.join(self.root_dir, d))]
+        
+        if subdirs:
+            # Class-based structure
+            for class_name in sorted(subdirs):
+                class_dir = os.path.join(self.root_dir, class_name)
+                class_idx = hash(class_name) % 1000
+                
+                for img_name in os.listdir(class_dir):
+                    if not img_name.lower().endswith(('.jpg', '.jpeg', '.png', '.bmp')):
+                        continue
+                    
+                    img_path = os.path.join(class_dir, img_name)
+                    self.images.append(img_path)
+                    self.labels.append(class_idx)
+                    self.boxes.append([0.25, 0.25, 0.5, 0.5])
+        else:
+            # Flat structure - treat all as one class
+            print(f"[DATA] Flat structure detected, loading all images")
+            for img_name in sorted(os.listdir(self.root_dir)):
                 if not img_name.lower().endswith(('.jpg', '.jpeg', '.png', '.bmp')):
                     continue
                 
-                img_path = os.path.join(class_dir, img_name)
+                img_path = os.path.join(self.root_dir, img_name)
                 self.images.append(img_path)
-                self.labels.append(class_idx)
-                
-                # 假标注 (实际使用时需要真实标注)
-                self.boxes.append([0.25, 0.25, 0.5, 0.5])  # 归一化的 [x, y, w, h]
+                self.labels.append(0)  # Single class
+                self.boxes.append([0.25, 0.25, 0.5, 0.5])
+        
+        print(f"[DATA] Loaded {len(self.images)} images from {self.root_dir}")
     
     def __len__(self):
         return len(self.images)
@@ -101,13 +109,13 @@ class ImageMeasureDataset(Dataset):
         label = self.labels[idx]
         box = self.boxes[idx]
         
-        # 加载图像
+        # Load image
         image = Image.open(img_path).convert('RGB')
         
         if self.transform:
             image = self.transform(image)
         
-        # 转换标注为 tensor
+        # Convert to tensors
         label_tensor = torch.tensor(label, dtype=torch.long)
         box_tensor = torch.tensor(box, dtype=torch.float32)
         
@@ -116,17 +124,17 @@ class ImageMeasureDataset(Dataset):
 
 def create_dataloader(data_dir, batch_size=16, train=True, input_size=224, num_workers=0):
     """
-    创建数据加载器
+    Create data loader
     
     Args:
-        data_dir: 数据目录
-        batch_size: 批次大小
-        train: 是否训练模式
-        input_size: 输入尺寸
-        num_workers: 数据加载线程数 (CPU 建议 0)
+        data_dir: Data directory
+        batch_size: Batch size
+        train: Whether training mode
+        input_size: Input size
+        num_workers: Data loading threads (0 for CPU)
     
     Returns:
-        DataLoader 对象
+        DataLoader object
     """
     transform = get_transform(train=train, input_size=input_size)
     dataset = ImageMeasureDataset(data_dir, transform=transform)
@@ -135,8 +143,8 @@ def create_dataloader(data_dir, batch_size=16, train=True, input_size=224, num_w
         dataset,
         batch_size=batch_size,
         shuffle=train,
-        num_workers=num_workers,  # CPU 模式建议设为 0
-        pin_memory=False,  # CPU 模式不需要 pinned memory
+        num_workers=num_workers,
+        pin_memory=False,
     )
     
     return dataloader
@@ -144,22 +152,22 @@ def create_dataloader(data_dir, batch_size=16, train=True, input_size=224, num_w
 
 def load_image(image_path, input_size=224):
     """
-    加载单张图像用于推理
+    Load single image for inference
     
     Args:
-        image_path: 图像路径
-        input_size: 输入尺寸
+        image_path: Image path
+        input_size: Input size
     
     Returns:
-        tensor: 处理后的图像 tensor
-        image: PIL Image (用于可视化)
+        tensor: Processed image tensor
+        image: PIL Image (for visualization)
     """
     transform = get_transform(train=False, input_size=input_size)
     
     image = Image.open(image_path).convert('RGB')
     tensor = transform(image)
     
-    # 添加 batch 维度
+    # Add batch dimension
     tensor = tensor.unsqueeze(0)
     
     return tensor, image
@@ -167,19 +175,19 @@ def load_image(image_path, input_size=224):
 
 def draw_bbox(image, box, class_name=None, color=(0, 255, 0), thickness=2):
     """
-    在图像上绘制边界框
+    Draw bounding box on image
     
     Args:
-        image: PIL Image 或 numpy array
-        box: [x, y, w, h] (归一化坐标 0-1)
-        class_name: 类别名称
-        color: 边框颜色 (BGR)
-        thickness: 线宽
+        image: PIL Image or numpy array
+        box: [x, y, w, h] (normalized 0-1)
+        class_name: Class name
+        color: Box color (BGR)
+        thickness: Line width
     
     Returns:
         numpy array with bbox drawn
     """
-    # 转换为 numpy
+    # Convert to numpy
     if isinstance(image, Image.Image):
         img_np = np.array(image)
     else:
@@ -187,16 +195,16 @@ def draw_bbox(image, box, class_name=None, color=(0, 255, 0), thickness=2):
     
     h, w = img_np.shape[:2]
     
-    # 归一化坐标转像素坐标
+    # Normalized to pixel coordinates
     x = int(box[0] * w)
     y = int(box[1] * h)
     bw = int(box[2] * w)
     bh = int(box[3] * h)
     
-    # 绘制矩形
+    # Draw rectangle
     cv2.rectangle(img_np, (x, y), (x + bw, y + bh), color, thickness)
     
-    # 绘制标签
+    # Draw label
     if class_name:
         cv2.putText(img_np, class_name, (x, y - 5), 
                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1)
@@ -205,12 +213,12 @@ def draw_bbox(image, box, class_name=None, color=(0, 255, 0), thickness=2):
 
 
 if __name__ == '__main__':
-    # 测试数据加载
-    print("测试数据加载...")
+    # Test data loading
+    print("[TEST] Testing data loading...")
     
-    # 创建测试数据
+    # Create test data
     test_dir = "data/test"
     os.makedirs(test_dir, exist_ok=True)
     
-    print(f"测试数据目录：{test_dir}")
-    print("请添加一些测试图像到该目录后运行训练脚本")
+    print(f"[INFO] Test directory: {test_dir}")
+    print("Add test images to run training")

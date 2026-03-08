@@ -72,10 +72,10 @@ def create_dataset(output_dir, num_train=100, num_val=20, num_test=10):
         num_val: 验证集数量
         num_test: 测试集数量
     """
-    print(f"📊 创建合成数据集...")
-    print(f"   训练集：{num_train} 张")
-    print(f"   验证集：{num_val} 张")
-    print(f"   测试集：{num_test} 张")
+    print("[DATA] Creating synthetic dataset...")
+    print(f"   Train: {num_train} images")
+    print(f"   Val: {num_val} images")
+    print(f"   Test: {num_test} images")
     
     splits = {
         'train': num_train,
@@ -87,7 +87,7 @@ def create_dataset(output_dir, num_train=100, num_val=20, num_test=10):
         split_dir = os.path.join(output_dir, split_name)
         os.makedirs(split_dir, exist_ok=True)
         
-        print(f"\n📁 生成 {split_name} 集...")
+        print(f"\n[DATA] Generating {split_name} set...")
         
         for i in range(num_images):
             # 生成图像
@@ -97,10 +97,10 @@ def create_dataset(output_dir, num_train=100, num_val=20, num_test=10):
             img_path = os.path.join(split_dir, f'img_{i:04d}.png')
             image.save(img_path)
         
-        print(f"✓ {split_name} 集完成：{num_images} 张")
+        print(f"[OK] {split_name} set done: {num_images} images")
     
-    print(f"\n✅ 数据集创建完成!")
-    print(f"📁 保存至：{output_dir}")
+    print(f"\n[OK] Dataset created successfully!")
+    print(f"[INFO] Saved to: {output_dir}")
     
     # 创建说明文件
     readme_path = os.path.join(output_dir, 'README.md')
@@ -123,7 +123,7 @@ def create_dataset(output_dir, num_train=100, num_val=20, num_test=10):
         f.write("python src/infer.py --model_path models/best.pth --image data/test/img_0000.png\n")
         f.write("```\n")
     
-    print(f"📝 说明文件：{readme_path}")
+    print(f"[INFO] README created: {readme_path}")
 
 
 def main():
